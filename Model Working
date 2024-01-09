@@ -16,6 +16,7 @@ generator_network = load_model('/content/drive/MyDrive/lr2hr_generator.h5')
 generator_network.compile(loss=['binary_crossentropy', 'mse'], loss_weights=[0.001, 1], optimizer=adam_optimizer)
 
 adam_optimizer = tensorflow.keras.optimizers.legacy.Adam(learning_rate=0.0002, beta_1=0.5)
+#declaring show_test_result function to get image and output our results
 def show_test_results(generator_network): #files = np.random.choice(new_test, size=1) #low_quality_images = [] #high_quality_images = []
 #for file in files:
 img = cv2.imread('/content/drive/MyDrive/070868.jpg') img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)

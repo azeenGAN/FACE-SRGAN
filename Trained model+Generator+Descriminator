@@ -1,0 +1,279 @@
+. import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt from tqdm import tqdm_notebook # %matplotlib inline
+
+import tensorflow
+print (tensorflow. version )
+
+!unzip /content/gdrive/MyDrive/GAN_datasets/face_scrub.zip -d /
+
+import glob
+train = glob.glob('/kaggle/input/celeba- dataset/img_align_celeba/img_align_celeba/*.jpg')[:5000] test = glob.glob('/kaggle/input/celeba- dataset/img_align_celeba/img_align_celeba/*.jpg')[190500:] len(train), len(test)
+import cv2
+for file in train[:10]: img = cv2.imread(file) print (img.shape)
+import cv2
+
+files = np.random.choice(train, size=4)
+
+print ("Low quality Samples") for k in range(1):
+plt.figure(figsize=(15, 15))o;jkh for j, file in enumerate(files):
+img = cv2.imread(file)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) img = cv2.resize(img, (64, 64)) plt.subplot(440 + 1 + j)
+plt.imshow(img) plt.axis('off') #plt.title(trainY[i])
+plt.show()
+
+print ("-"*100)
+print ("Real High quality version") for k in range(1):
+plt.figure(figsize=(15, 15))
+for j, file in enumerate(files): img = cv2.imread(file)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) img = cv2.resize(img, (256, 256)) plt.subplot(440 + 1 + j)
+plt.imshow(img) plt.axis('off')
+ 
+#plt.title(trainY[i]) plt.show()
+import tensorflow_addons as tfa
+
+def custom_resnet_block(input_layer, filters, upsample=False, resnet=True): x = input_layer
+if resnet==True:
+x = tensorflow.keras.layers.Conv2D(filters, kernel_size=3, strides=1, padding='same')(x)
+x = tensorflow.keras.layers.Activation('relu')(x)
+x = tensorflow.keras.layers.BatchNormalization(momentum=0.8)(x)
+
+x = tensorflow.keras.layers.Conv2D(filters, kernel_size=3, strides=1, padding='same')(x)
+x = tfa.layers.InstanceNormalization()(x)
+
+# Skip Connection
+x = tensorflow.keras.layers.Add()([x, input_layer])
+
+if upsample==True:
+x = tensorflow.keras.layers.UpSampling2D(size=2)(x)
+x = tensorflow.keras.layers.Conv2D(filters, kernel_size=3, strides=1, padding='same')(x)
+x = tensorflow.keras.layers.Activation('relu')(x) return x
+
+low_quality_image = tensorflow.keras.layers.Input(shape=(64, 64, 3))
+
+first = tensorflow.keras.layers.Conv2D(64, kernel_size=9, strides=1, padding='same')(low_quality_image)
+first = tensorflow.keras.layers.Activation('relu')(first)
+
+x = custom_resnet_block(first, 64, False) x = custom_resnet_block(x, 64, False)
+x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False)
+
+x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False)
+
+x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False)
+
+x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False) x = custom_resnet_block(x, 64, False)
+
+y = tensorflow.keras.layers.Conv2D(64, kernel_size=3, strides=1, padding='same')(x)
+y = tensorflow.keras.layers.BatchNormalization(momentum=0.8)(y) y = tensorflow.keras.layers.Add()([y, first])
+ 
+
+z = custom_resnet_block(y, 256, True, False) z = custom_resnet_block(z, 256, True, False)
+
+z = tensorflow.keras.layers.Conv2D(3, kernel_size=9, strides=1, padding='same')(z)
+high_quality_image = tensorflow.keras.layers.Activation('tanh')(z)
+
+generator_network = tensorflow.keras.models.Model(inputs=low_quality_image, outputs=high_quality_image)
+print (generator_network.summary())
+
+generator_network = tensorflow.keras.models.Model(inputs=low_quality_image, outputs=high_quality_image)
+#generator = Generator() tensorflow.keras.utils.plot_model(generator_network, show_shapes=True, dpi=64)
+def custom_d_block(input_layer, filters, strides, bn=True):
+x = tensorflow.keras.layers.Conv2D(filters, kernel_size=3, strides=strides, padding='same')(input_layer)
+x = tensorflow.keras.layers.LeakyReLU(alpha=0.2)(x) if bn==True:
+x = tfa.layers.InstanceNormalization()(x) return x
+high_quality_input = tensorflow.keras.layers.Input(shape=(256, 256, 3))
+
+x = custom_d_block(high_quality_input, 64, 1, False)
+x = custom_d_block(x, 64, 2, True)
+x = custom_d_block(x, 128, 1, True)
+x = custom_d_block(x, 128, 2, True)
+x = custom_d_block(x, 256, 1, True)
+x = custom_d_block(x, 256, 2, True)
+x = custom_d_block(x, 512, 1, True)
+x = custom_d_block(x, 512, 2, True)
+
+x = tensorflow.keras.layers.Dense(1024)(x)
+x = tensorflow.keras.layers.LeakyReLU(alpha=0.2)(x)
+
+real_vs_fake_patch = tensorflow.keras.layers.Dense(1, activation='sigmoid')(x)
+
+discriminator_network = tensorflow.keras.models.Model(inputs=high_quality_input, outputs=real_vs_fake_patch)
+print (discriminator_network.summary())
+
+adam_optimizer = tensorflow.keras.optimizers.legacy.Adam(learning_rate=0.0002, beta_1=0.5)
+
+discriminator_network.compile(loss='mse', optimizer=adam_optimizer, metrics=['accuracy'])
+
+image_input = tensorflow.keras.layers.Input(shape=(256, 256, 3)) pre_trained_vgg =
+ 
+tensorflow.keras.applications.vgg19.VGG19(weights='imagenet', input_shape=(256, 256, 3), include_top=False) pre_trained_vgg_model = tensorflow.keras.models.Model(inputs=pre_trained_vgg.input, outputs=pre_trained_vgg.get_layer('block3_conv4').output)
+pre_trained_image_feautures = pre_trained_vgg_model(image_input)
+
+custom_vgg = tensorflow.keras.models.Model(inputs=image_input, outputs=pre_trained_image_feautures)
+print (custom_vgg.summary())
+
+low_quality_image = tensorflow.keras.layers.Input(shape=(64, 64, 3))
+high_quality_input = tensorflow.keras.layers.Input(shape=(256, 256, 3))
+
+fake_high_quality_image = generator_network(low_quality_image)
+
+discriminator_network.trainable=False custom_vgg.trainable=False
+d_output = discriminator_network(fake_high_quality_image) fake_high_quality_features = custom_vgg(fake_high_quality_image)
+sr_gan = tensorflow.keras.models.Model(inputs=[low_quality_image, high_quality_input],\
+outputs=[d_output,
+fake_high_quality_features])
+
+print (sr_gan.summary())
+
+sr_gan.compile(loss=['binary_crossentropy', 'mse'], loss_weights=[0.001, 1], optimizer=adam_optimizer)
+from tqdm import tqdm_notebook
+
+new_train = []
+for file in tqdm_notebook(train): img = cv2.imread(file)
+if (img.shape[0] >= 218): new_train.append(file)
+len(new_train)
+
+def get_training_samples(batch_size):
+files = np.random.choice(new_train, size=batch_size) low_quality_images = []
+high_quality_images = [] for file in files:
+img = cv2.imread(file)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) img2 = cv2.resize(img, (256, 256))
+img3 = cv2.resize(img, (64, 64)) low_quality_images.append((img3-127.5)/127.5) high_quality_images.append((img2-127.5)/127.5)
+low_quality_images = np.array(low_quality_images) high_quality_images = np.array(high_quality_images) return low_quality_images, high_quality_images
+ 
+
+def show_generator_results(generator_network):
+low_quality_images, high_quality_images = get_training_samples(3) fake_high_quality_images =
+generator_network.predict_on_batch(low_quality_images)
+print ("Low quality input images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+plt.imshow((low_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+print ("Generated high quality images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+plt.imshow((fake_high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+print ("Real high quality images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+plt.imshow((high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+len(new_train)
+
+epochs = 10
+batch_size = 1
+steps = 1000
+for i in range(0, epochs): if (i%1 == 0):
+show_generator_results(generator_network) for j in range(steps):
+low_quality_images, high_quality_images = get_training_samples(batch_size)
+fake_high_quality_images = generator_network.predict_on_batch(low_quality_images)
+
+fake_patch = np.zeros((batch_size, 16, 16, 1))
+real_patch = np.ones((batch_size, 16, 16, 1))
+
+# Updating Discriminator weights discriminator_network.trainable=True loss_d_real =
+discriminator_network.train_on_batch(high_quality_images, real_patch) loss_d_fake =
+discriminator_network.train_on_batch(fake_high_quality_images, fake_patch) loss_d = np.add(loss_d_real, loss_d_fake)/2.0
+ 
+# Make the Discriminator belive that these are real samples and calculate loss to train the generator
+low_quality_images, high_quality_images = get_training_samples(batch_size)
+discriminator_network.trainable=False
+real_vgg_features = custom_vgg.predict_on_batch(high_quality_images)
+
+# Updating Generator weights
+loss_g = sr_gan.train_on_batch([low_quality_images, high_quality_images], [real_patch, real_vgg_features])
+
+if j%200 == 0:
+print ("Epoch:%.0f, Step:%.0f, D-Loss:%.3f, D-Acc:%.3f, G-
+Loss:%.3f"%(i,j,loss_d[0],loss_d[1]*100,loss_g[0]))
+"""results"""
+
+from tqdm import tqdm_notebook new_test = []
+for file in tqdm_notebook(test): img = cv2.imread(file)
+if (img.shape[0] >= 218): new_test.append(file)
+len(new_test)
+
+def show_test_results(generator_network): files = np.random.choice(new_test, size=3) low_quality_images = [] high_quality_images = []
+for file in files:
+img = cv2.imread(file)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) img2 = cv2.resize(img, (256, 256))
+img3 = cv2.resize(img, (64, 64)) low_quality_images.append((img3-127.5)/127.5) high_quality_images.append((img2-127.5)/127.5)
+
+low_quality_images = np.array(low_quality_images) high_quality_images = np.array(high_quality_images)
+fake_high_quality_images = generator_network.predict_on_batch(low_quality_images)
+
+print ("Low quality input images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+plt.imshow((low_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+print ("Generated high quality images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+ 
+plt.imshow((fake_high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+print ("Real high quality images") plt.figure(figsize=(13, 13))
+for i in range(3): plt.subplot(330 + 1 + i)
+plt.imshow((high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+for i in range(5): show_test_results(generator_network) print ("-"*100)
+print ("-"*100)
+
+files = ['/kaggle/input/celeba- dataset/img_align_celeba/img_align_celeba/000001.jpg', '/kaggle/input/celeba- dataset/img_align_celeba/img_align_celeba/000002.jpg']
+files = np.random.choice(files, size=2) low_quality_images = [] high_quality_images = []
+for file in files:
+img = cv2.imread(file)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) img2 = cv2.resize(img, (256, 256))
+img3 = cv2.resize(img, (64, 64)) low_quality_images.append((img3-127.5)/127.5) high_quality_images.append((img2-127.5)/127.5)
+
+low_quality_images = np.array(low_quality_images) high_quality_images = np.array(high_quality_images)
+fake_high_quality_images = generator_network.predict_on_batch(low_quality_images)
+print ("Low quality input images") plt.figure(figsize=(15, 15))
+for i in range(2): plt.subplot(330 + 1 + i)
+plt.imshow((low_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+print ("Generated high quality images") plt.figure(figsize=(15, 15))
+for i in range(2): plt.subplot(330 + 1 + i)
+plt.imshow((fake_high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+print ("Real high quality images") plt.figure(figsize=(15, 15))
+for i in range(2):
+ 
+plt.subplot(330 + 1 + i) plt.imshow((high_quality_images[i]+1.0)/2.0) plt.axis('off')
+plt.show()
+
+generator_network.save('/kaggle/working/lr2hr_generator.h5') discriminator_network.save('/kaggle/working/lr2hr_discriminator.h5')
+
+# Initialize empty lists to store loss values discriminator_loss_real = [] discriminator_loss_fake = [] discriminator_loss = []
+generator_loss = []
+
+for i in range(0, 2): if (i%1 == 0):
+show_generator_results(generator_network) for j in range(steps):
+low_quality_images, high_quality_images = get_training_samples(batch_size)
+fake_high_quality_images = generator_network.predict_on_batch(low_quality_images)
+
+fake_patch = np.zeros((batch_size, 16, 16, 1))
+real_patch = np.ones((batch_size, 16, 16, 1))
+
+# Updating Discriminator weights discriminator_network.trainable=True loss_d_real =
+discriminator_network.train_on_batch(high_quality_images, real_patch) loss_d_fake =
+discriminator_network.train_on_batch(fake_high_quality_images, fake_patch) loss_d = np.add(loss_d_real, loss_d_fake)/2.0
+
+# Append loss values to lists discriminator_loss_real.append(loss_d_real) discriminator_loss_fake.append(loss_d_fake) discriminator_loss.append(loss_d)
+
+# Make the Discriminator believe that these are real samples and calculate loss to train the generator
+low_quality_images, high_quality_images = get_training_samples(batch_size)
+discriminator_network.trainable=False
+real_vgg_features = custom_vgg.predict_on_batch(high_quality_images)
+
+# Updating Generator weights
+loss_g = sr_gan.train_on_batch([low_quality_images, high_quality_images], [real_patch, real_vgg_features])
+# Append loss value to list generator_loss.append(loss_g)
+if j%200 == 0:
+print ("Epoch:%.0f, Step:%.0f, D-Loss:%.3f, D-Acc:%.3f, G-
+ 
+ 
+
